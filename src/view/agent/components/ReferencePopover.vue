@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import DOMPurify from 'dompurify'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { Dropdown as VDropdown } from 'floating-vue'
+import { computed, ref, watch } from 'vue'
 
 import { fetchDocumentThumbnails } from '../services/flow-agent'
 import type { IReference } from '../types/chat'
 import {
+  buildDocumentDownloadUrl,
   buildImageUrl,
   getReferenceChunk,
   isImageReference,
@@ -17,11 +19,13 @@ const props = defineProps<{
   referenceIndex: number
 }>()
 
-const open = ref(false)
 const thumbnailSrc = ref('')
 
 const chunk = computed(() => getReferenceChunk(props.reference, props.referenceIndex))
 const documentInfo = computed(() => pickDocumentByChunk(props.reference, chunk.value))
+const documentLink = computed(() =>
+  documentInfo.value ? buildDocumentDownloadUrl(documentInfo.value) : '',
+)
 const imageSrc = computed(() => buildImageUrl(chunk.value?.image_id))
 const isImageTrigger = computed(() => isImageReference(chunk.value?.doc_type))
 const sanitizedContent = computed(() =>
@@ -43,25 +47,6 @@ async function loadThumbnail() {
   }
 }
 
-function closeOnDocumentClick(event: MouseEvent) {
-  const target = event.target as HTMLElement | null
-  if (!target?.closest('.reference-popover')) {
-    open.value = false
-  }
-}
-
-function togglePopover() {
-  open.value = !open.value
-}
-
-function openPopover() {
-  open.value = true
-}
-
-function closePopover() {
-  open.value = false
-}
-
 watch(
   () => documentInfo.value?.doc_id,
   () => {
@@ -69,26 +54,22 @@ watch(
   },
   { immediate: true },
 )
-
-onMounted(() => {
-  document.addEventListener('click', closeOnDocumentClick)
-})
-
-onBeforeUnmount(() => {
-  document.removeEventListener('click', closeOnDocumentClick)
-})
 </script>
 
 <template>
-  <span
+  <VDropdown
+    :triggers="['hover']"
+    :popper-triggers="['hover']"
+    :delay="{ show: 0, hide: 80 }"
+    :distance="10"
+    placement="top-start"
+    theme="dropdown"
+    popper-class="reference-popover-popper"
     class="reference-popover"
-    @mouseenter="openPopover"
-    @mouseleave="closePopover"
   >
     <button
       class="reference-trigger"
       type="button"
-      @click.stop="togglePopover"
     >
       <img
         v-if="isImageTrigger && imageSrc"
@@ -105,57 +86,58 @@ onBeforeUnmount(() => {
       </span>
     </button>
 
-    <div
-      v-if="open && chunk"
-      class="reference-panel"
-      @click.stop
-    >
-      <img
-        v-if="imageSrc"
-        :src="imageSrc"
-        alt="引用预览"
-        class="reference-image-preview"
-      >
-
+    <template #popper>
       <div
-        v-if="sanitizedContent"
-        class="reference-content"
-        v-html="sanitizedContent"
-      />
-
-      <div
-        v-if="documentInfo"
-        class="reference-document"
+        v-if="chunk"
+        class="reference-panel"
       >
         <img
-          v-if="thumbnailSrc"
-          :src="thumbnailSrc"
-          alt="文档缩略图"
-          class="reference-document-thumbnail"
+          v-if="imageSrc"
+          :src="imageSrc"
+          alt="引用预览"
+          class="reference-image-preview"
         >
-        <a
-          v-if="documentInfo.url"
-          :href="documentInfo.url"
-          target="_blank"
-          rel="noreferrer noopener"
-          class="reference-document-link"
+
+        <div
+          v-if="sanitizedContent"
+          class="reference-content"
+          v-html="sanitizedContent"
+        />
+
+        <div
+          v-if="documentInfo"
+          class="reference-document"
         >
-          {{ documentInfo.doc_name }}
-        </a>
-        <span
-          v-else
-          class="reference-document-name"
-        >
-          {{ documentInfo.doc_name }}
-        </span>
+          <img
+            v-if="thumbnailSrc"
+            :src="thumbnailSrc"
+            alt="文档缩略图"
+            class="reference-document-thumbnail"
+          >
+          <a
+            v-if="documentLink"
+            :href="documentLink"
+            target="_blank"
+            rel="noreferrer noopener"
+            download
+            class="reference-document-link"
+          >
+            {{ documentInfo.doc_name }}
+          </a>
+          <span
+            v-else
+            class="reference-document-name"
+          >
+            {{ documentInfo.doc_name }}
+          </span>
+        </div>
       </div>
-    </div>
-  </span>
+    </template>
+  </VDropdown>
 </template>
 
 <style scoped>
 .reference-popover {
-  position: relative;
   display: inline-flex;
   vertical-align: middle;
 }
@@ -192,17 +174,8 @@ onBeforeUnmount(() => {
 }
 
 .reference-panel {
-  position: absolute;
-  left: 0;
-  bottom: calc(100% + 10px);
-  z-index: 30;
   width: min(360px, 72vw);
-  border: 1px solid rgba(148, 163, 184, 0.24);
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.97);
-  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.18);
   padding: 14px;
-  backdrop-filter: blur(16px);
 }
 
 .reference-image-preview {
@@ -262,5 +235,17 @@ onBeforeUnmount(() => {
 
 .reference-document-link:hover {
   text-decoration: underline;
+}
+
+:global(.reference-popover-popper .v-popper__inner) {
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.18);
+  backdrop-filter: blur(16px);
+}
+
+:global(.reference-popover-popper .v-popper__arrow-container) {
+  display: none;
 }
 </style>

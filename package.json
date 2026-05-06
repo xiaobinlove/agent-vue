@@ -11,6 +11,7 @@
   "dependencies": {
     "dompurify": "^3.4.2",
     "eventsource-parser": "^3.0.8",
+    "floating-vue": "^5.2.2",
     "highlight.js": "^11.11.1",
     "katex": "^0.16.45",
     "markdown-it": "^14.1.1",

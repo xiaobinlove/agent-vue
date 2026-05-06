@@ -3,18 +3,16 @@ import { computed, onMounted, ref } from 'vue'
 import {
   createFlowConversation,
   fetchFlowConversation,
-  fetchRuntimeDialog,
-  getFlowDialogId,
   runFlowCompletion,
 } from '../services/flow-agent'
-import type { ChatMessage, IAnswer, IRuntimeDialog } from '../types/chat'
+import type { ChatMessage, IAnswer } from '../types/chat'
+import { getFlowDialogId } from '../utils/env'
 import {
   buildClientId,
   buildConversationName,
   buildConversationStorageKey,
   buildInitialMessages,
   generateConversationId,
-  getDialogPrologue,
   getErrorMessage,
   mapConversationToChatMessages,
   normalizeReference,
@@ -24,7 +22,6 @@ export function useFlowChat() {
   const dialogId = getFlowDialogId()
   const storageKey = buildConversationStorageKey(dialogId)
 
-  const runtimeDialog = ref<IRuntimeDialog | null>(null)
   const messages = ref<ChatMessage[]>([])
   const draft = ref('')
   const isInitializing = ref(true)
@@ -33,7 +30,6 @@ export function useFlowChat() {
   const currentConversationId = ref('')
   const streamAbortController = ref<AbortController | null>(null)
 
-  const prologue = computed(() => getDialogPrologue(runtimeDialog.value))
   const canSend = computed(
     () => !isInitializing.value && !isSending.value && draft.value.trim().length > 0,
   )
@@ -50,9 +46,7 @@ export function useFlowChat() {
 
   async function createFreshConversation() {
     const conversationId = generateConversationId()
-    const conversationName = buildConversationName(
-      runtimeDialog.value?.name || '新对话',
-    )
+    const conversationName = buildConversationName('新对话')
 
     const conversation = await createFlowConversation({
       dialogId,
@@ -61,14 +55,14 @@ export function useFlowChat() {
     })
 
     persistConversationId(conversation.id)
-    messages.value = buildInitialMessages(prologue.value)
+    messages.value = buildInitialMessages()
     return conversation.id
   }
 
   async function hydrateConversation(conversationId: string) {
     const conversation = await fetchFlowConversation(conversationId)
     persistConversationId(conversationId)
-    messages.value = mapConversationToChatMessages(conversation, prologue.value)
+    messages.value = mapConversationToChatMessages(conversation)
   }
 
   async function bootstrapConversation() {
@@ -91,7 +85,6 @@ export function useFlowChat() {
     errorMessage.value = ''
 
     try {
-      runtimeDialog.value = await fetchRuntimeDialog(dialogId)
       await bootstrapConversation()
     } catch (error) {
       errorMessage.value = getErrorMessage(error)
@@ -198,8 +191,6 @@ export function useFlowChat() {
   return {
     draft,
     messages,
-    prologue,
-    runtimeDialog,
     isInitializing,
     isSending,
     errorMessage,

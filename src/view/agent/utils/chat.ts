@@ -4,8 +4,8 @@ import type {
   IConversation,
   IReference,
   IReferenceChunk,
-  IRuntimeDialog,
 } from '../types/chat'
+import { getRuntimeBaseConfig } from './env'
 
 export const CURRENT_REFERENCE_REG = /\[ID:(\d+)\]/g
 const OLD_REFERENCE_REG = /(#{2}\d+\${2})/g
@@ -55,24 +55,6 @@ export function buildConversationStorageKey(dialogId: string) {
 export function buildConversationName(rawName: string) {
   const name = rawName.trim()
   return name.length > 30 ? `${name.slice(0, 30)}...` : name
-}
-
-export function getDialogPrologue(dialog: IRuntimeDialog | null) {
-  const promptConfig = dialog?.promptConfig ?? dialog?.prompt_config
-  if (promptConfig?.prologue) {
-    return promptConfig.prologue
-  }
-
-  if (!dialog?.agentDsl) {
-    return ''
-  }
-
-  try {
-    const dsl = JSON.parse(dialog.agentDsl)
-    return dsl?.components?.begin?.obj?.params?.prologue ?? ''
-  } catch {
-    return ''
-  }
 }
 
 export function normalizeReference(
@@ -141,6 +123,22 @@ export function getReferenceDocument(
   return reference.doc_aggs.find((item) => item.doc_id === chunk.document_id)
 }
 
+export function getReferenceDocuments(reference?: IReference) {
+  if (!reference?.doc_aggs?.length) {
+    return []
+  }
+
+  const seen = new Set<string>()
+  return reference.doc_aggs.filter((item) => {
+    if (!item?.doc_id || seen.has(item.doc_id)) {
+      return false
+    }
+
+    seen.add(item.doc_id)
+    return true
+  })
+}
+
 export function isImageReference(docType?: string) {
   return Boolean(docType && IMAGE_REFERENCE_TYPES.has(docType))
 }
@@ -159,15 +157,14 @@ export function resolveAgentAssetUrl(url = '') {
     return url
   }
 
-  const baseUrl = (import.meta.env.VITE_PULSE_BASE_URL || '').replace(/\/$/, '')
-  const agentPath = import.meta.env.VITE_BASE_AGENT_PATH || ''
+  const { requestBaseUrl, agentBasePath } = getRuntimeBaseConfig()
 
   if (url.startsWith('/v1')) {
-    return url.replace(/^\/v1/, `${baseUrl}${agentPath}`)
+    return url.replace(/^\/v1/, `${requestBaseUrl}${agentBasePath}`)
   }
 
   if (url.startsWith('/')) {
-    return `${baseUrl}${url}`
+    return `${requestBaseUrl}${url}`
   }
 
   return url
@@ -178,32 +175,41 @@ export function buildImageUrl(imageId = '') {
     return ''
   }
 
-  const baseUrl = (import.meta.env.VITE_PULSE_BASE_URL || '').replace(/\/$/, '')
-  const agentPath = import.meta.env.VITE_BASE_AGENT_PATH || ''
-  return `${baseUrl}${agentPath}/document/image/${imageId}`
+  const { requestBaseUrl, agentBasePath } = getRuntimeBaseConfig()
+  return `${requestBaseUrl}${agentBasePath}/document/image/${imageId}`
 }
 
-export function buildInitialMessages(prologue: string) {
-  if (!prologue.trim()) {
-    return [] as ChatMessage[]
+export function buildDocumentDownloadUrl(document: Docagg, prefix = 'document') {
+  if (document.url) {
+    return resolveAgentAssetUrl(document.url)
   }
 
-  return [
-    {
-      clientId: buildClientId('assistant'),
-      role: 'assistant' as const,
-      content: prologue,
-    },
-  ]
+  if (!document.doc_id) {
+    return ''
+  }
+
+  const { requestBaseUrl, agentBasePath } = getRuntimeBaseConfig()
+  const extension = getDocumentExtension(document.doc_name || '')
+  const query = new URLSearchParams()
+
+  if (extension) {
+    query.set('ext', extension)
+  }
+  query.set('prefix', prefix)
+
+  return `${requestBaseUrl}${agentBasePath}/document/get/${document.doc_id}?${query.toString()}`
+}
+
+export function buildInitialMessages() {
+  return [] as ChatMessage[]
 }
 
 export function mapConversationToChatMessages(
   conversation: IConversation | null,
-  prologue: string,
 ) {
   const rawMessages = conversation?.message ?? conversation?.dsl?.messages ?? []
   if (!Array.isArray(rawMessages) || rawMessages.length === 0) {
-    return buildInitialMessages(prologue)
+    return [] as ChatMessage[]
   }
 
   const references = normalizeReferenceCollection(

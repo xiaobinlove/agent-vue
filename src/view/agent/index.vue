@@ -103,13 +103,15 @@ function handleTextareaKeydown(event: KeyboardEvent) {
 
 <style scoped>
 .agent-view {
-  min-height: 100vh;
+  height: 100dvh;
   padding: 20px;
+  overflow: hidden;
 }
 
 .chat-shell {
   display: flex;
-  min-height: calc(100vh - 40px);
+  height: calc(100dvh - 40px);
+  min-height: calc(100dvh - 40px);
   flex-direction: column;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.82);
@@ -154,6 +156,10 @@ function handleTextareaKeydown(event: KeyboardEvent) {
 }
 
 .composer {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  flex: 0 0 auto;
   border-top: 1px solid rgba(226, 232, 240, 0.92);
   padding: 18px 24px 20px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.72), #ffffff 48%);
@@ -245,7 +251,8 @@ function handleTextareaKeydown(event: KeyboardEvent) {
   }
 
   .chat-shell {
-    min-height: 100vh;
+    height: 100dvh;
+    min-height: 100dvh;
     border: none;
     border-radius: 0;
   }

@@ -4,8 +4,8 @@ import type {
   ApiResponse,
   IAnswer,
   IConversation,
-  IRuntimeDialog,
 } from '../types/chat'
+import { getRuntimeBaseConfig } from '../utils/env'
 
 const USER_TOKEN_KEY = 'zov-user-token'
 const SHARE_TOKEN_KEY = 'zov-share-token'
@@ -13,42 +13,9 @@ const SHARE_HEADER_KEY = 'share-token'
 
 const documentThumbnailCache = new Map<string, string>()
 
-function trimTrailingSlash(value = '') {
-  return value.replace(/\/$/, '')
-}
-
-function ensureEnv(name: string, value: string | undefined) {
-  const resolved = value?.trim()
-  if (!resolved) {
-    throw new Error(`${name} 未配置，无法初始化流程智能体页面。`)
-  }
-
-  return resolved
-}
-
-function getBaseConfig() {
-  const pulseBaseUrl = trimTrailingSlash(
-    ensureEnv('VITE_PULSE_BASE_URL', import.meta.env.VITE_PULSE_BASE_URL),
-  )
-  const agentBasePath = ensureEnv(
-    'VITE_BASE_AGENT_PATH',
-    import.meta.env.VITE_BASE_AGENT_PATH,
-  )
-  const aiAgentBasePath = ensureEnv(
-    'VITE_BASE_AIAGENT_PATH',
-    import.meta.env.VITE_BASE_AIAGENT_PATH,
-  )
-
-  return {
-    pulseBaseUrl,
-    agentBasePath,
-    aiAgentBasePath,
-  }
-}
-
 function buildUrl(basePath: string, endpoint: string) {
-  const { pulseBaseUrl } = getBaseConfig()
-  return `${pulseBaseUrl}${basePath}${endpoint}`
+  const { requestBaseUrl } = getRuntimeBaseConfig()
+  return `${requestBaseUrl}${basePath}${endpoint}`
 }
 
 function createHeaders(includeJson = false) {
@@ -108,26 +75,12 @@ async function requestJson<T>(
   return parseApiResponse<T>(response)
 }
 
-export function getFlowDialogId() {
-  return ensureEnv('VITE_FLOW_DIALOG_ID', import.meta.env.VITE_FLOW_DIALOG_ID)
-}
-
-export async function fetchRuntimeDialog(dialogId: string) {
-  const { aiAgentBasePath } = getBaseConfig()
-  const url = buildUrl(
-    aiAgentBasePath,
-    `/client/dialog/runtime/get?id=${encodeURIComponent(dialogId)}`,
-  )
-
-  return requestJson<IRuntimeDialog>(url)
-}
-
 export async function createFlowConversation(payload: {
   dialogId: string
   conversationId: string
   name: string
 }) {
-  const { aiAgentBasePath } = getBaseConfig()
+  const { aiAgentBasePath } = getRuntimeBaseConfig()
   const url = buildUrl(aiAgentBasePath, '/agent/canvas/conversation/create')
 
   const data = await requestJson<{ id?: string }>(
@@ -151,7 +104,7 @@ export async function createFlowConversation(payload: {
 }
 
 export async function fetchFlowConversation(conversationId: string) {
-  const { aiAgentBasePath } = getBaseConfig()
+  const { aiAgentBasePath } = getRuntimeBaseConfig()
   const url = buildUrl(
     aiAgentBasePath,
     `/agent/canvas/conversation/get?id=${encodeURIComponent(conversationId)}`,
@@ -173,7 +126,7 @@ export async function runFlowCompletion(payload: {
   signal: AbortSignal
   onAnswer: (answer: IAnswer) => void
 }) {
-  const { agentBasePath } = getBaseConfig()
+  const { agentBasePath } = getRuntimeBaseConfig()
   const url = buildUrl(agentBasePath, '/canvas/run/completion')
 
   const response = await fetch(url, {
@@ -244,7 +197,7 @@ export async function fetchDocumentThumbnails(docIds: string[]) {
 
   const unresolvedIds = normalizedIds.filter((id) => !documentThumbnailCache.has(id))
   if (unresolvedIds.length > 0) {
-    const { agentBasePath } = getBaseConfig()
+    const { agentBasePath } = getRuntimeBaseConfig()
     const url = buildUrl(agentBasePath, '/document/thumbnails')
     const data = await requestJson<Record<string, string>>(
       url,

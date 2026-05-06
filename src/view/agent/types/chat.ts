@@ -1,12 +1,5 @@
 export type MessageRole = 'assistant' | 'user'
 
-export interface PromptConfig {
-  prologue?: string
-  system?: string
-  empty_response?: string
-  parameters?: unknown[]
-}
-
 export interface Docagg {
   count?: number
   doc_id: string
@@ -65,15 +58,6 @@ export interface IConversation {
   dsl?: FlowConversationDsl
   message?: FlowMessage[]
   reference?: IReference[] | Record<number, IReference>
-}
-
-export interface IRuntimeDialog {
-  id: string
-  name: string
-  icon?: string
-  promptConfig?: PromptConfig
-  prompt_config?: PromptConfig
-  agentDsl?: string
 }
 
 export interface ApiResponse<T> {
