@@ -1,16 +1,26 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
+import ConversationSidebar from './components/ConversationSidebar.vue'
 import MessageList from './components/MessageList.vue'
 import { useFlowChat } from './composables/useFlowChat'
 
 const {
+  conversations,
+  currentConversationId,
+  currentConversationName,
   draft,
   messages,
   isInitializing,
   isSending,
+  isCreatingConversation,
+  removingConversationId,
+  isConversationActionDisabled,
   errorMessage,
   canSend,
+  createConversation,
+  selectConversation,
+  removeConversation,
   sendMessage,
   stopStreaming,
   retryInitialize,
@@ -33,70 +43,96 @@ function handleTextareaKeydown(event: KeyboardEvent) {
 <template>
   <div class="agent-view">
     <div class="chat-shell">
-      <div
-        v-if="errorMessage && !hasRenderableMessages && !isInitializing"
-        class="chat-error"
-      >
-        <div class="chat-error-title">流程智能体加载失败</div>
-        <p class="chat-error-text">
-          {{ errorMessage }}
-        </p>
-        <button
-          class="chat-error-button"
-          type="button"
-          @click="retryInitialize"
-        >
-          重新加载
-        </button>
-      </div>
-
-      <MessageList
-        v-else
-        :messages="messages"
+      <ConversationSidebar
+        :conversations="conversations"
+        :current-conversation-id="currentConversationId"
         :loading="isInitializing"
+        :creating="isCreatingConversation"
+        :removing-conversation-id="removingConversationId"
+        :disabled="isConversationActionDisabled"
+        @create="createConversation"
+        @select="selectConversation"
+        @remove="removeConversation"
       />
 
-      <div class="composer">
-        <div
-          v-if="errorMessage && hasRenderableMessages"
-          class="composer-error"
-        >
-          {{ errorMessage }}
-        </div>
+      <section class="chat-main">
+        <header class="conversation-title">
+          <div
+            class="conversation-title-name"
+            :title="currentConversationName"
+          >
+            {{ currentConversationName }}
+          </div>
+        </header>
 
-        <textarea
-          v-model="draft"
-          class="composer-input"
-          :disabled="isInitializing"
-          placeholder="输入你的问题，流程智能体会按当前流程为你处理..."
-          rows="1"
-          @keydown="handleTextareaKeydown"
-        />
-
-        <div class="composer-footer">
-          <div class="composer-tip">
-            {{ isSending ? '正在输出，点击停止可中断当前回答。' : 'Enter 发送，Shift + Enter 换行。' }}
+        <div class="chat-main-body">
+          <div
+            v-if="errorMessage && !hasRenderableMessages && !isInitializing"
+            class="chat-error"
+          >
+            <div class="chat-error-title">流程智能体加载失败</div>
+            <p class="chat-error-text">
+              {{ errorMessage }}
+            </p>
+            <button
+              class="chat-error-button"
+              type="button"
+              @click="retryInitialize"
+            >
+              重新加载
+            </button>
           </div>
 
-          <button
-            v-if="isSending"
-            type="button"
-            class="composer-button composer-button--secondary"
-            @click="stopStreaming"
-          >
-            停止
-          </button>
-          <button
+          <MessageList
+            :conversation-id="currentConversationId"
             v-else
-            type="button"
-            class="composer-button composer-button--primary"
-            :disabled="!canSend"
-            @click="sendMessage"
-          >
-            发送
-          </button>
+            :messages="messages"
+            :loading="isInitializing"
+          />
         </div>
-      </div>
+
+        <div class="composer">
+          <div
+            v-if="errorMessage && hasRenderableMessages"
+            class="composer-error"
+          >
+            {{ errorMessage }}
+          </div>
+
+          <textarea
+            v-model="draft"
+            class="composer-input"
+            :disabled="isInitializing"
+            placeholder="输入你的问题，流程智能体会按当前流程为你处理..."
+            rows="1"
+            @keydown="handleTextareaKeydown"
+          />
+
+          <div class="composer-footer">
+            <div class="composer-tip">
+              {{ isSending ? '正在输出，点击停止可中断当前回答。' : 'Enter 发送，Shift + Enter 换行。' }}
+            </div>
+
+            <button
+              v-if="isSending"
+              type="button"
+              class="composer-button composer-button--secondary"
+              @click="stopStreaming"
+            >
+              停止
+            </button>
+            <button
+              v-else
+              type="button"
+              class="composer-button composer-button--primary"
+              :disabled="!canSend"
+              @click="sendMessage"
+            >
+              发送
+            </button>
+          </div>
+        </div>
+      </section>
     </div>
   </div>
 </template>
@@ -110,15 +146,53 @@ function handleTextareaKeydown(event: KeyboardEvent) {
 
 .chat-shell {
   display: flex;
+  gap: 12px;
   height: calc(100dvh - 40px);
   min-height: calc(100dvh - 40px);
+  overflow: hidden;
+  border-radius: 28px;
+  background: rgba(225, 222, 255, 0.8);
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(20px);
+  padding: 12px;
+}
+
+.chat-main {
+  display: flex;
+  min-width: 0;
+  flex: 1;
   flex-direction: column;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.82);
-  border-radius: 28px;
-  background: rgba(255, 255, 255, 0.88);
-  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.08);
-  backdrop-filter: blur(20px);
+  border-radius: 20px;
+  background: #fff;
+}
+
+.conversation-title {
+  display: flex;
+  justify-content: center;
+  flex: 0 0 auto;
+  padding: 20px 24px;
+}
+
+.conversation-title-name {
+  max-width: min(500px, 100%);
+  overflow: hidden;
+  color: #242424;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.5;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-main-body {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .chat-error {
@@ -251,10 +325,26 @@ function handleTextareaKeydown(event: KeyboardEvent) {
   }
 
   .chat-shell {
+    gap: 10px;
     height: 100dvh;
     min-height: 100dvh;
-    border: none;
+    flex-direction: column;
     border-radius: 0;
+    padding: 10px;
+  }
+
+  .chat-main {
+    min-height: 0;
+    border-radius: 18px;
+  }
+
+  .conversation-title {
+    padding: 16px 18px 12px;
+  }
+
+  .conversation-title-name {
+    max-width: 100%;
+    font-size: 15px;
   }
 
   .composer {

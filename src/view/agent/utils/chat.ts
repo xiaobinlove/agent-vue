@@ -8,6 +8,7 @@ import type {
 import { getRuntimeBaseConfig } from './env'
 
 export const CURRENT_REFERENCE_REG = /\[ID:(\d+)\]/g
+export const DEFAULT_CONVERSATION_NAME = '新对话'
 const OLD_REFERENCE_REG = /(#{2}\d+\${2})/g
 const THINK_TAG_REG = /<think>([\s\S]*?)<\/think>/g
 const BLOCK_LATEX_REG = /\\\[([\s\S]*?)\\\]/g
@@ -55,6 +56,56 @@ export function buildConversationStorageKey(dialogId: string) {
 export function buildConversationName(rawName: string) {
   const name = rawName.trim()
   return name.length > 30 ? `${name.slice(0, 30)}...` : name
+}
+
+export function getConversationDisplayName(
+  conversation?: Pick<IConversation, 'name'> | null,
+) {
+  return conversation?.name?.trim() || DEFAULT_CONVERSATION_NAME
+}
+
+export function isDefaultConversationName(name?: string | null) {
+  return (
+    getConversationDisplayName({
+      name: typeof name === 'string' ? name : undefined,
+    }) === DEFAULT_CONVERSATION_NAME
+  )
+}
+
+export function getConversationTimestamp(
+  conversation?: Pick<IConversation, 'createTime' | 'create_time'> | null,
+) {
+  const rawTimestamp = Number(
+    conversation?.create_time ?? conversation?.createTime ?? 0,
+  )
+
+  if (!Number.isFinite(rawTimestamp) || rawTimestamp <= 0) {
+    return 0
+  }
+
+  return rawTimestamp < 1e12 ? rawTimestamp * 1000 : rawTimestamp
+}
+
+export function normalizeConversation(conversation: IConversation) {
+  const normalizedConversation: IConversation = {
+    ...conversation,
+    name: getConversationDisplayName(conversation),
+  }
+  const timestamp = getConversationTimestamp(conversation)
+
+  if (timestamp > 0) {
+    normalizedConversation.create_time = timestamp
+    normalizedConversation.createTime = timestamp
+  }
+
+  return normalizedConversation
+}
+
+export function sortConversations(conversations: IConversation[]) {
+  return [...conversations].sort(
+    (left, right) =>
+      getConversationTimestamp(right) - getConversationTimestamp(left),
+  )
 }
 
 export function normalizeReference(

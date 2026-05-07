@@ -5,10 +5,9 @@ import type {
   IAnswer,
   IConversation,
 } from '../types/chat'
-import { getRuntimeBaseConfig } from '../utils/env'
+import { normalizeConversation } from '../utils/chat'
+import { getRequestAuthConfig, getRuntimeBaseConfig } from '../utils/env'
 
-const USER_TOKEN_KEY = 'zov-user-token'
-const SHARE_TOKEN_KEY = 'zov-share-token'
 const SHARE_HEADER_KEY = 'share-token'
 
 const documentThumbnailCache = new Map<string, string>()
@@ -20,12 +19,9 @@ function buildUrl(basePath: string, endpoint: string) {
 
 function createHeaders(includeJson = false) {
   const headers = new Headers()
-  const token = localStorage.getItem(USER_TOKEN_KEY)
-  const shareToken = localStorage.getItem(SHARE_TOKEN_KEY)
+  const { userToken, shareToken } = getRequestAuthConfig()
 
-  if (token) {
-    headers.set('Authorization', token)
-  }
+  headers.set('Authorization', userToken)
 
   if (shareToken) {
     headers.set(SHARE_HEADER_KEY, shareToken)
@@ -97,10 +93,32 @@ export async function createFlowConversation(payload: {
     },
     true,
   )
+  const createdAt = Date.now()
 
   return {
     id: data.id || payload.conversationId,
+    name: payload.name,
+    create_time: createdAt,
+    createTime: createdAt,
   }
+}
+
+export async function listFlowConversations(dialogId: string) {
+  const { aiAgentBasePath } = getRuntimeBaseConfig()
+  const url = buildUrl(aiAgentBasePath, '/agent/canvas/conversation/list')
+
+  const data = await requestJson<IConversation[]>(
+    url,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        canvasId: dialogId,
+      }),
+    },
+    true,
+  )
+
+  return Array.isArray(data) ? data.map((item) => normalizeConversation(item)) : []
 }
 
 export async function fetchFlowConversation(conversationId: string) {
@@ -112,11 +130,47 @@ export async function fetchFlowConversation(conversationId: string) {
 
   const data = await requestJson<IConversation>(url)
 
-  return {
+  return normalizeConversation({
     ...data,
     message: data.message ?? data.dsl?.messages ?? [],
     reference: data.reference ?? data.dsl?.retrieval ?? [],
-  } satisfies IConversation
+  } satisfies IConversation)
+}
+
+export async function removeFlowConversation(conversationId: string) {
+  const { aiAgentBasePath } = getRuntimeBaseConfig()
+  const url = buildUrl(aiAgentBasePath, '/agent/canvas/conversation/rm')
+
+  await requestJson<unknown>(
+    url,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        id: conversationId,
+      }),
+    },
+    true,
+  )
+}
+
+export async function updateFlowConversationName(
+  conversationId: string,
+  name: string,
+) {
+  const { aiAgentBasePath } = getRuntimeBaseConfig()
+  const url = buildUrl(aiAgentBasePath, '/agent/canvas/conversation/update')
+
+  await requestJson<unknown>(
+    url,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        id: conversationId,
+        name,
+      }),
+    },
+    true,
+  )
 }
 
 export async function runFlowCompletion(payload: {

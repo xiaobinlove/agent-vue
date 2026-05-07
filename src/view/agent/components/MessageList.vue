@@ -7,25 +7,63 @@ import MessageItem from './MessageItem.vue'
 const props = defineProps<{
   messages: ChatMessage[]
   loading?: boolean
+  conversationId?: string
 }>()
 
+const listRef = ref<HTMLElement | null>(null)
 const endRef = ref<HTMLDivElement | null>(null)
+
+function scrollToBottom(behavior: ScrollBehavior = 'auto') {
+  const listElement = listRef.value
+  if (listElement) {
+    listElement.scrollTo({
+      top: listElement.scrollHeight,
+      behavior,
+    })
+  }
+
+  endRef.value?.scrollIntoView({ behavior, block: 'end' })
+}
+
+async function scrollAfterLayout(behavior: ScrollBehavior = 'auto') {
+  await nextTick()
+
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      scrollToBottom(behavior)
+    })
+  })
+}
 
 watch(
   () =>
     props.messages
       .map((message) => `${message.clientId}:${message.content.length}:${message.streaming ? 1 : 0}`)
       .join('|'),
-  async () => {
-    await nextTick()
-    endRef.value?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+  () => {
+    void scrollAfterLayout('smooth')
   },
-  { immediate: true },
+  { flush: 'post' },
+)
+
+watch(
+  () => [props.conversationId, props.loading] as const,
+  ([conversationId, loading], previousValue) => {
+    const previousLoading = previousValue?.[1]
+
+    if (!loading && (previousLoading || conversationId)) {
+      void scrollAfterLayout('auto')
+    }
+  },
+  { immediate: true, flush: 'post' },
 )
 </script>
 
 <template>
-  <section class="message-list">
+  <section
+    ref="listRef"
+    class="message-list"
+  >
     <div
       v-if="loading"
       class="message-list-status"

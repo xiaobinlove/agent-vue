@@ -55,6 +55,9 @@ export interface IConversation {
   name?: string
   createTime?: number
   create_time?: number
+  updateTime?: number
+  update_time?: number
+  is_new?: boolean
   dsl?: FlowConversationDsl
   message?: FlowMessage[]
   reference?: IReference[] | Record<number, IReference>

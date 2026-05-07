@@ -22,6 +22,11 @@ function isAbsoluteUrl(value: string) {
   }
 }
 
+function resolveOptionalEnv(value: string | undefined) {
+  const resolved = value?.trim()
+  return resolved || ''
+}
+
 export function getRuntimeBaseConfig() {
   const pulseBaseUrl = trimTrailingSlash(
     ensureEnv('VITE_PULSE_BASE_URL', import.meta.env.VITE_PULSE_BASE_URL),
@@ -50,4 +55,14 @@ export function getRuntimeBaseConfig() {
 
 export function getFlowDialogId() {
   return ensureEnv('VITE_FLOW_DIALOG_ID', import.meta.env.VITE_FLOW_DIALOG_ID)
+}
+
+export function getRequestAuthConfig() {
+  return {
+    userToken: ensureEnv(
+      'VITE_ZOV_USER_TOKEN',
+      import.meta.env.VITE_ZOV_USER_TOKEN,
+    ),
+    shareToken: resolveOptionalEnv(import.meta.env.VITE_ZOV_SHARE_TOKEN),
+  }
 }
