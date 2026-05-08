@@ -58,11 +58,15 @@ export function getFlowDialogId() {
 }
 
 export function getRequestAuthConfig() {
+  const userToken = resolveOptionalEnv(import.meta.env.VITE_ZOV_USER_TOKEN)
+  const shareToken = resolveOptionalEnv(import.meta.env.VITE_ZOV_SHARE_TOKEN)
+
+  if (!userToken && !shareToken) {
+    throw new Error('VITE_ZOV_USER_TOKEN 或 VITE_ZOV_SHARE_TOKEN 未配置，无法初始化流程智能体页面。')
+  }
+
   return {
-    userToken: ensureEnv(
-      'VITE_ZOV_USER_TOKEN',
-      import.meta.env.VITE_ZOV_USER_TOKEN,
-    ),
-    shareToken: resolveOptionalEnv(import.meta.env.VITE_ZOV_SHARE_TOKEN),
+    userToken,
+    shareToken,
   }
 }

@@ -21,7 +21,9 @@ function createHeaders(includeJson = false) {
   const headers = new Headers()
   const { userToken, shareToken } = getRequestAuthConfig()
 
-  headers.set('Authorization', userToken)
+  if (userToken) {
+    headers.set('Authorization', userToken)
+  }
 
   if (shareToken) {
     headers.set(SHARE_HEADER_KEY, shareToken)
