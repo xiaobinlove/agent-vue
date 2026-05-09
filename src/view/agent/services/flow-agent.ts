@@ -134,8 +134,13 @@ export async function fetchFlowConversation(conversationId: string) {
 
   return normalizeConversation({
     ...data,
-    message: data.message ?? data.dsl?.messages ?? [],
-    reference: data.reference ?? data.dsl?.retrieval ?? [],
+    message: data.message ?? data.messages ?? data.dsl?.messages ?? [],
+    reference:
+      data.reference ??
+      data.retrieval ??
+      data.dsl?.reference ??
+      data.dsl?.retrieval ??
+      [],
   } satisfies IConversation)
 }
 

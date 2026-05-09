@@ -34,6 +34,7 @@ export interface FlowMessage {
   prompt?: string
   doc_ids?: string[]
   audio_binary?: string
+  reference?: IReference
 }
 
 export interface IAnswer {
@@ -47,6 +48,7 @@ export interface IAnswer {
 
 export interface FlowConversationDsl {
   messages?: FlowMessage[]
+  reference?: IReference[] | Record<number, IReference>
   retrieval?: IReference[] | Record<number, IReference>
 }
 
@@ -60,7 +62,9 @@ export interface IConversation {
   is_new?: boolean
   dsl?: FlowConversationDsl
   message?: FlowMessage[]
+  messages?: FlowMessage[]
   reference?: IReference[] | Record<number, IReference>
+  retrieval?: IReference[] | Record<number, IReference>
 }
 
 export interface ApiResponse<T> {

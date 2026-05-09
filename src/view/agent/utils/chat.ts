@@ -90,6 +90,15 @@ export function normalizeConversation(conversation: IConversation) {
   const normalizedConversation: IConversation = {
     ...conversation,
     name: getConversationDisplayName(conversation),
+    message:
+      conversation.message ??
+      conversation.messages ??
+      conversation.dsl?.messages,
+    reference:
+      conversation.reference ??
+      conversation.retrieval ??
+      conversation.dsl?.reference ??
+      conversation.dsl?.retrieval,
   }
   const timestamp = getConversationTimestamp(conversation)
 
@@ -117,14 +126,14 @@ export function normalizeReference(
 
   const rawChunks = Array.isArray(reference.chunks)
     ? reference.chunks
-    : Object.entries(reference.chunks ?? {})
-        .sort(([left], [right]) => Number(left) - Number(right))
-        .map(([, value]) => value)
+    : reference.chunks ?? {}
 
   return {
     chunks: rawChunks,
     doc_aggs: Array.isArray(reference.doc_aggs) ? reference.doc_aggs : [],
-    total: reference.total ?? rawChunks.length,
+    total:
+      reference.total ??
+      (Array.isArray(rawChunks) ? rawChunks.length : Object.keys(rawChunks).length),
   }
 }
 
@@ -146,6 +155,24 @@ export function normalizeReferenceCollection(
     .filter((item): item is IReference => Boolean(item))
 }
 
+export function hasReferenceData(reference?: IReference) {
+  if (!reference) {
+    return false
+  }
+
+  const chunkCount = Array.isArray(reference.chunks)
+    ? reference.chunks.length
+    : reference.chunks && typeof reference.chunks === 'object'
+      ? Object.keys(reference.chunks).length
+      : 0
+
+  return (
+    (Array.isArray(reference.doc_aggs) && reference.doc_aggs.length > 0) ||
+    chunkCount > 0 ||
+    Number(reference.total) > 0
+  )
+}
+
 export function getReferenceChunk(
   reference: IReference | undefined,
   index: number,
@@ -154,11 +181,18 @@ export function getReferenceChunk(
     return undefined
   }
 
-  const chunks = Array.isArray(reference.chunks)
-    ? reference.chunks
-    : Object.entries(reference.chunks)
-        .sort(([left], [right]) => Number(left) - Number(right))
-        .map(([, value]) => value)
+  if (Array.isArray(reference.chunks)) {
+    return reference.chunks[index]
+  }
+
+  const keyedChunk = reference.chunks?.[index]
+  if (keyedChunk) {
+    return keyedChunk
+  }
+
+  const chunks = Object.entries(reference.chunks ?? {})
+    .sort(([left], [right]) => Number(left) - Number(right))
+    .map(([, value]) => value)
 
   return chunks[index]
 }
@@ -258,28 +292,46 @@ export function buildInitialMessages() {
 export function mapConversationToChatMessages(
   conversation: IConversation | null,
 ) {
-  const rawMessages = conversation?.message ?? conversation?.dsl?.messages ?? []
+  const rawMessages =
+    conversation?.message ??
+    conversation?.messages ??
+    conversation?.dsl?.messages ??
+    []
   if (!Array.isArray(rawMessages) || rawMessages.length === 0) {
     return [] as ChatMessage[]
   }
 
   const references = normalizeReferenceCollection(
-    conversation?.reference ?? conversation?.dsl?.retrieval,
+    conversation?.reference ??
+      conversation?.retrieval ??
+      conversation?.dsl?.reference ??
+      conversation?.dsl?.retrieval,
   )
-
-  let assistantCursor = 0
+  const assistantMessages = rawMessages.filter(
+    (message) => message.role === 'assistant',
+  )
+  const assistantMessagesWithoutPrologue = assistantMessages.slice(1)
 
   return rawMessages.map((message, index) => {
     const isAssistant = message.role === 'assistant'
-    const directReference = normalizeReference(references[index])
-    const fallbackReference = normalizeReference(references[assistantCursor])
+    const matcher = (item: typeof message) =>
+      item.id === message.id && item.content === message.content
+    const assistantIndex = assistantMessages.findIndex(matcher)
+    const assistantIndexWithoutPrologue =
+      assistantMessagesWithoutPrologue.findIndex(matcher)
+    const referenceCandidates = [
+      normalizeReference(message.reference),
+      normalizeReference(references[assistantIndex]),
+      normalizeReference(references[assistantIndexWithoutPrologue]),
+      normalizeReference(references[index]),
+    ]
     const reference = isAssistant
-      ? directReference ?? fallbackReference
+      ? referenceCandidates.find(hasReferenceData) ??
+        referenceCandidates[0] ??
+        referenceCandidates[1] ??
+        referenceCandidates[2] ??
+        referenceCandidates[3]
       : undefined
-
-    if (isAssistant) {
-      assistantCursor += 1
-    }
 
     return {
       ...message,
